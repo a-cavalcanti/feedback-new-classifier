@@ -122,11 +122,14 @@ def experimentos(banco):
     X = dataset.iloc[:, :-1]
     y = dataset.iloc[:, -1]
 
-    X_resampled, y_resampled = SMOTE().fit_resample(X, y)
-    print(sorted(Counter(y_resampled).items()))
+    #SMOTE
+    #X_resampled, y_resampled = SMOTE().fit_resample(X, y)
+    #print(sorted(Counter(y_resampled).items()))
 
-    #X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=123)
-    X_train, X_test, y_train, y_test = train_test_split(X_resampled, y_resampled, test_size=0.2, random_state=123)
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=123)
+
+    #SMOTE
+    #X_train, X_test, y_train, y_test = train_test_split(X_resampled, y_resampled, test_size=0.2, random_state=123)
 
 
 
@@ -180,8 +183,10 @@ def experimentos(banco):
     print("kappa = ", kappa)
 
     classifier = xgb.XGBClassifier(n_estimators=best_mtree)
-    #classifier.fit(X, y)
-    classifier.fit(X_resampled, y_resampled)
+    classifier.fit(X, y)
+
+    #SMOTE
+    #classifier.fit(X_resampled, y_resampled)
 
     print("Feature Importance SMOTE" + " " + banco)
     features_importance = zip(classifier.feature_importances_, features)
@@ -200,35 +205,6 @@ def experimentos(banco):
     plt.close()
 
 
-
-
-
-
-
-
-    # resultados, classificador = validacao_cruzada(X_train, y_train, X1, y1, k=10, ntree=200,mtry=37, metricas=metricas, resultados=resultados)
-    # print("RESULTADOS: ")
-    # print(resultados)
-    # y_pred = classificador.predict(X_test)
-    # accuracy = accuracy_score(y_pred, y_test)
-    # kappa = cohen_kappa_score(y_pred, y_test)
-    # #oob = 1 - classificador.oob_score_
-    # print(confusion_matrix(y_pred=y_pred, y_true=y_test))
-    #
-    # print(accuracy)
-    # print(kappa)
-    #print(oob)
-
-
-    # y_pred = classificador.predict(newfeatures)
-    #print("classe predita ", y_pred)
-
-
-#SALVAR RESULTADOS
-    # path = "resultados_pt_en.csv"
-    # resultados = pd.DataFrame.from_dict(resultados)
-    # resultados.to_csv(path, index=False)
-    # print("salvou")
 def printResults(vector):
     for element in vector:
         print(element)
