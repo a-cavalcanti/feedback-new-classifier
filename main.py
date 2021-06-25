@@ -227,7 +227,7 @@ def experimentos():
     #     mtry = randint(5, 116)
     #     ntree = i
     #
-    #     resultados = validacao_cruzada(X, y, X1, y1, k=10, ntree=ntree,mtry=mtry, metricas=metricas, resultados=resultados)
+    #     resultados = cross_validation(X, y, X1, y1, k=10, ntree=ntree,mtry=mtry, metricas=metricas, resultados=resultados)
     #     print(resultados)
 
     resultados, classificador = validacao_cruzada(X_train, y_train, X1, y1, k=10, ntree=200,mtry=37, metricas=metricas, resultados=resultados)

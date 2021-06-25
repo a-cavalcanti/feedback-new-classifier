@@ -1,5 +1,6 @@
 import pandas as pd
 import numpy as np
+import os
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import RepeatedKFold, cross_validate, RepeatedStratifiedKFold, train_test_split
 from sklearn.metrics import confusion_matrix, accuracy_score, cohen_kappa_score, classification_report#, mean_squared_error
@@ -11,217 +12,210 @@ import matplotlib.pyplot as plt
 import xgboost as xgb
 from imblearn.over_sampling import SMOTE
 from collections import Counter
-import nltk
-#nltk.download('punkt')
+# import nltk
+# nltk.download('punkt')
 import string
 # nlp = spacy.load('pt')
 
 
+def read_classes(path):
+    CURR_DIR = os.path.dirname(os.path.realpath(__file__))
+    print(CURR_DIR)
+    data = pd.read_csv(CURR_DIR+'/'+path)
+    id_name = data.keys()[0]
+    vector = []
+    print(id_name)
+    # Remove id col
+    del data[id_name]
+    # 11 -> classes number
+    for i in range(11):
+        vector.append(data[data.keys()[i]].values.tolist())
+    return vector
 
-def erro_por_classe(matriz_confusao, resultados):
-    # A PARTIR DA MATRIZ DE CONFUSÃO CALCULA O ERRO POR CLASSE
-    # **
-    # matriz_confusao - soma das matrize de confusão de cada fold do tipo ndarray(numpy) de forma NxN
-    # resultados - dicionário de todos os resultados
-    # **
-    # retorna o dicionário resultados com os erros de cada classe preenchidos
 
-    tam = matriz_confusao.shape[0]
+def read_data(csv):
+    CURR_DIR = os.path.dirname(os.path.realpath(__file__))
+    print(CURR_DIR)
+    data = pd.read_csv(CURR_DIR+'/'+csv)
+    # id col name
+    id_name = data.keys()[0]
+    new_data = data.copy()
 
+    # Remove id col
+    # del new_data[id_name]
+    return data, new_data.values.tolist()
+
+
+def error_by_class(confusionmatrix):
+    # calculate the error by class using the confusion matrix
+    tam = confusionmatrix.shape[0]
+    vector = []
     for i in range(tam):
-
-        acerto = matriz_confusao[i][i]
-        total = sum(matriz_confusao[i])
-
-        taxa_erro = round(1 - (acerto / total),4)
-
-        resultados["erro_classe_"+str(i)].append(taxa_erro)
+        match = confusionmatrix[i][i]
+        total = sum(confusionmatrix[i])
+        error_value = round(1 - (match/total), 4)
+        vector.append(error_value)
+    return vector
 
 
-def validacao_cruzada(X, y, features, k, ntree, resultados ):
-    ##É REALIZADO OS O EXPERIMENTO COM VALIDAÇÃO CRUZADA E OS RESULTADOS É ADICIONADO A UM DICIONÁRIO
-    # **
-    # X - dados
-    # y - classes
-    # k - número de folds
-    # ntree - Número de árvores
-    # mtry - número de features
-    # metricas - lista de metricas que serão utilizadas na avaliacão( "acurácia","kappa", "OOB_erro")
-    # resultados - dicionário que vai ser utilizado para cada experimento, salvando os resultados em um dicionário para ser salvo em CSV
-    # **
-    # retorna o dicionário resultados com os resultados desse experimento adicionados
+def cross_validation(data_x, data_y, k, ntree, results):
 
-    resultados_parciais = {} #SALVAR RESULTADOS DE CADA RODADA DA VALIDAÇÃO CRUZADA
-    resultados_parciais.update({'ntree': []})
-    resultados_parciais.update({'mtry': []})
-    resultados_parciais.update({'acurácia': []})
-    resultados_parciais.update({'kappa': []})
-    resultados_parciais.update({'accuracy': []})
-    resultados_parciais.update({'erro': []})
+    accuracy = []
+    kappa = []
 
-    ## VALIDAÇÃO CRUZADA
+    # cross-validation
+    rkf = RepeatedStratifiedKFold(n_splits=k, n_repeats=1, random_state=54321)
+    classifier = xgb.XGBClassifier(n_estimators=ntree, use_label_encoder=False, eval_metric='mlogloss')
+    conf_matrix = np.zeros((2, 2))
 
-    rkf = RepeatedStratifiedKFold(n_splits=k, n_repeats=1, random_state=54321) #DIVIDI OS DADOS NOS CONJUNTOS QUE SERÃO DE      TREINO E TESTE EM CADA RODADA DA VALIDAÇÃO CRUZZADA
+    for train_index, test_index in rkf.split(data_x, data_y):
+        x_train, x_test = [data_x[i] for i in train_index], [data_x[j] for j in test_index]
+        y_train, y_test = [data_y[i] for i in train_index], [data_y[j] for j in test_index]
 
-    matriz_confusao = np.zeros((2,2))
-
-
-    for train_index, test_index in rkf.split(X, y):
-        X_train, X_test = [X.iloc[i] for i in train_index], [X.iloc[j] for j in test_index]
-        y_train, y_test = [y.iloc[i] for i in train_index], [y.iloc[j] for j in test_index]
-
-        X_train_np = np.asarray(X_train)
-        X_test_np = np.asarray(X_test)
+        x_train_np = np.asarray(x_train)
+        x_test_np = np.asarray(x_test)
         y_train_np = np.asarray(y_train)
         y_test_np = np.asarray(y_test)
 
-        classificador = xgb.XGBClassifier(n_estimators=ntree)
-        classificador.fit(X_train_np, y_train_np)
-        y_pred = classificador.predict(X_test_np)
+        # classifier training
+        classifier.fit(x_train_np, y_train_np)
+        class_predicted = classifier.predict(x_test_np)
+        # transform for np
+        class_predicted_np = np.asarray(class_predicted)
 
-        resultados_parciais["acurácia"].append(accuracy_score(y_pred, y_test_np))
-        resultados_parciais["kappa"].append(cohen_kappa_score(y_pred, y_test_np))
+        accuracy.append(accuracy_score(class_predicted_np, y_test_np))
+        kappa.append(cohen_kappa_score(class_predicted_np, y_test_np))
 
-        matriz_confusao = matriz_confusao + confusion_matrix(y_pred=y_pred, y_true=y_test_np) ##A MATRIZ DE CONFUSÃO FINAL SERÁ A SOMA DAS MATRIZES DE CONFUSÃO DE CADA RODADA DO KFOLD
+        # sum the confusion matrix for each k-fold execution
+        conf_matrix = conf_matrix + confusion_matrix(y_pred=class_predicted_np, y_true=y_test_np)
 
+    # calculating mean and standard deviation for accuracy and kappa
+    acc_media = float(np.mean(accuracy))
+    acc_std = float(np.std(accuracy))
+    kappa_media = float(np.mean(kappa))
+    kappa_std = float(np.std(kappa))
 
-    ## SALVANDO OS PARÊMTROS E RESULTADOS DO EXPERIMENTO
+    results['ntree'].append(classifier.n_estimators)
+    results['error-by-class'].append(error_by_class(conf_matrix))
+    results["accuracy-std"].append(str(round(acc_media, 4)) + "(" + str(round(acc_std, 4)) + ")")
+    results["accuracy"].append(round(acc_media, 4))
+    results["error"].append(round(1 - acc_media, 4))
+    results["kappa-std"].append(str(round(kappa_media, 4)) + "(" + str(round(kappa_std, 4)) + ")")
+    results["kappa"].append(round(kappa_media, 4))
 
-
-    #print(matriz_confusao)
-    resultados['ntree'].append(classificador.n_estimators)
-    erro_por_classe(matriz_confusao, resultados)
-
-    media = np.mean(resultados_parciais["acurácia"])
-    std = np.std(resultados_parciais["acurácia"])
-    resultados["acurácia"].append(str(round(media,4))+"("+str(round(std,4))+")")
-
-    resultados["accuracy"].append(round(media, 4))
-    resultados["erro"].append(round(1 - media, 4))
-
-    media = np.mean(resultados_parciais["kappa"])
-    std = np.std(resultados_parciais["kappa"])
-    resultados["kappa"].append(str(round(media, 4)) + "(" + str(round(std, 4)) + ")")
-
-
-
-    return resultados, classificador
+    return results, classifier
 
 
+def experiments():
 
-def experimentos(banco):
+    csv_classes = 'classes.csv'
+    # one list with 11 lists
+    classes = read_classes(csv_classes)
 
-##CARREGAR OS DADOS
+    csv_features = 'features.csv'
+    data_train, features = read_data(csv_features)
+
+    indices = open('features.csv', 'r', encoding='utf-8', errors='ignore').read().split('\n')
+    print(indices[0])
+    features_list = indices[0].split(',')
+    print(features_list)
+    del features_list[0]
+    print(features_list)
+    print(len(features_list))
+    print("Quantity: ")
+    print(len(features))
+
+    for z in range(len(classes)):
+
+        y = classes[z]
+        x_train, x_test, y_train, y_test = train_test_split(features, y, test_size=0.2, random_state=123)
+
+        j = 0
+        best = 0.0
+        best_mtree = 0
+
+        results = {}
+        results.update({'ntree': []})
+        results.update({'accuracy-std': []})
+        results.update({'kappa-std': []})
+        results.update({'kappa': []})
+        results.update({'accuracy': []})
+        results.update({'error': []})
+        results.update({'error-by-class': []})
+
+        # choosing the best ntree
+        for i in range(100, 601, 50):
+
+            results, classifier = cross_validation(x_train, y_train, k=10, ntree=i, results=results)
+            print(results["accuracy"])
+            if results["accuracy"][j] > best:
+                best = results["accuracy"][j]
+                best_classifier = classifier
+                best_mtree = i
+            j = j+1
+
+        print("TRAIN RESULTS: ")
+        print(results)
+        output_result = open('result-class-' + str(z), 'w')
+        output_result.write(str(results))
+        output_result.write('\n')
+
+        x_test_np = np.asarray(x_test)
+        y_test_np = np.asarray(y_test)
+
+        y_pred = best_classifier.predict(x_test_np)
+        y_pred_np = np.asarray(y_pred)
+        accuracy = accuracy_score(y_pred_np, y_test_np)
+        kappa = cohen_kappa_score(y_pred_np, y_test_np)
+        class_report = classification_report(y_test_np, y_pred_np)
+        conf_matrix = confusion_matrix(y_pred=y_pred_np, y_true=y_test_np)
+
+        print("TEST RESULTS: ")
+        print(class_report)
+        print(conf_matrix)
+        print("accuracy = ", accuracy)
+        print("kappa = ", kappa)
+
+        output_result.write("accuracy = " + str(accuracy) + "\n")
+        output_result.write("kappa = " + str(kappa) + "\n")
+        output_result.write(str(conf_matrix) + "\n")
+        output_result.write(str(class_report) + "\n")
+        output_result.close()
+
+        classifier = xgb.XGBClassifier(n_estimators=best_mtree, use_label_encoder=False, eval_metric='mlogloss')
+
+        features_np = np.asarray(features)
+        y_np = np.asarray(y)
+        classifier.fit(features_np, y_np)
+
+        print("Feature Importance SMOTE" + " class: " + str(z))
+        features_importance = zip(classifier.feature_importances_, features_list)
+        output = open('feature-importance-classe-'+str(z), 'w')
+        for importance, feature in sorted(features_importance, reverse=True):
+            print("%s: %f%% - %f%%" % (feature, importance * 100, importance))
+            output.write("%s: %f%% - %f%%" % (feature, importance * 100, importance))
+            output.write("\n")
+        output.close()
+
+        plot_graph(results, z)
 
 
-    dataset = pd.read_csv(banco)
-    features = dataset.columns.difference(['id_feedback','class'])
-
-    print(features)
-
-    X = dataset.iloc[:, :-1]
-    y = dataset.iloc[:, -1]
-
-    #SMOTE
-    #X_resampled, y_resampled = SMOTE().fit_resample(X, y)
-    #print(sorted(Counter(y_resampled).items()))
-
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=123)
-
-    #SMOTE
-    #X_train, X_test, y_train, y_test = train_test_split(X_resampled, y_resampled, test_size=0.2, random_state=123)
-
-
-
-    resultados = {}
-    resultados.update({'ntree': []})
-    resultados.update({'mtry': []})
-    resultados.update({'acurácia': []})
-    resultados.update({'kappa': []})
-    resultados.update({'accuracy': []})
-    resultados.update({'erro': []})
-
-
-    classes = set(y_train)
-    for i in classes:
-        resultados.update({"erro_classe_"+str(i):[]})
-
-    j = 0
-    maior = 0.0
-    best_mtree = 0
-
-    ##NTREE - TREINAMENTO
-    for i in range(100,601,50):
-        #mtry = randint(5, 116)
-
-        resultados, classificador = validacao_cruzada(X_train, y_train, features, k=10, ntree=i, resultados=resultados)
-
-        if resultados["accuracy"][j] > maior:
-            maior = resultados["accuracy"][j]
-            best_classifier = classificador
-            best_mtree = i
-        j = j+1
-
-
-    print("RESULTADOS: ")
-    print(resultados)
-
-    printResults(resultados['acurácia'])
-    printResults(resultados['kappa'])
-
-    X_test_np = np.asarray(X_test)
-    y_test_np = np.asarray(y_test)
-
-    y_pred = best_classifier.predict(X_test_np)
-    accuracy = accuracy_score(y_pred, y_test_np)
-    kappa = cohen_kappa_score(y_pred, y_test_np)
-    print(classification_report(y_test_np, y_pred))
-    # oob = 1 - classificador.oob_score_
-
-    print(confusion_matrix(y_pred=y_pred, y_true=y_test_np))
-    print("accuracy = ", accuracy)
-    print("kappa = ", kappa)
-
-    classifier = xgb.XGBClassifier(n_estimators=best_mtree)
-    classifier.fit(X, y)
-
-    #SMOTE
-    #classifier.fit(X_resampled, y_resampled)
-
-    print("Feature Importance SMOTE" + " " + banco)
-    features_importance = zip(classifier.feature_importances_, features)
-    for importance, feature in sorted(features_importance, reverse=True):
-        print("%s: %f%% - %f%%" % (feature, importance * 100, importance))
-
-
-    plt.scatter(resultados["ntree"], resultados["erro"]) #pontos no grafico
-    plt.plot(resultados["ntree"], resultados["erro"], color='red')
+def plot_graph(results, z):
+    # points on graph
+    plt.scatter(results["ntree"], results["error"])
+    plt.plot(results["ntree"], results["error"], color='red')
     plt.ylabel("Error rate")
     plt.xlabel("Number of estimators")
     plt.title("Estimator Parameter Tuning ")
-    #plt.show()
-    figure_name = banco.replace(".csv", "")
-    plt.savefig("resultados-"+figure_name+".png", format='png')
+    # plt.show()
+    figure_name = "class-" + str(z)
+    plt.savefig("results-" + figure_name + ".png", format='png')
     plt.close()
 
 
-def printResults(vector):
+def print_results(vector):
     for element in vector:
         print(element)
 
 
-bancogp1 = "banco-gp1.csv"
-bancogp3 = "banco-gp3.csv"
-bancogp5 = "banco-gp5.csv"
-bancogp6 = "banco-gp6.csv"
-bancoft = "banco-lak-FT.csv"
-bancofp = "banco-lak-FP.csv"
-bancofs = "banco-lak-FS.csv"
-
-experimentos(bancogp1)
-experimentos(bancogp3)
-experimentos(bancogp5)
-experimentos(bancogp6)
-experimentos(bancoft)
-experimentos(bancofp)
-experimentos(bancofs)
+experiments()
