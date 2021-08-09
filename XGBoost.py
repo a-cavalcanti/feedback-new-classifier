@@ -1,17 +1,12 @@
 import pandas as pd
 import numpy as np
 import os
-from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import RepeatedKFold, cross_validate, RepeatedStratifiedKFold, train_test_split
-from sklearn.metrics import confusion_matrix, accuracy_score, cohen_kappa_score, classification_report#, mean_squared_error
-from carregar_dados import carregar_dados
+from sklearn.metrics import confusion_matrix, accuracy_score, cohen_kappa_score, classification_report
+#, mean_squared_error
 from sklearn.model_selection import cross_val_score
-from sklearn.datasets import load_iris
-from sklearn.ensemble import AdaBoostClassifier
 import matplotlib.pyplot as plt
 import xgboost as xgb
-from imblearn.over_sampling import SMOTE
-from collections import Counter
 # import nltk
 # nltk.download('punkt')
 import string
@@ -116,14 +111,10 @@ def experiments():
     data_train, features = read_data(csv_features)
 
     indices = open('features.csv', 'r', encoding='utf-8', errors='ignore').read().split('\n')
-    print(indices[0])
     features_list = indices[0].split(',')
-    print(features_list)
     del features_list[0]
-    print(features_list)
-    print(len(features_list))
     print("Quantity: ")
-    print(len(features))
+    print(len(features_list))
 
     for z in range(len(classes)):
 
